@@ -1,0 +1,143 @@
+---
+title: "Untitled"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: scroll
+    runtime: shiny
+    source_code: embed
+    theme: cosmo
+---
+
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(readxl)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(reshape)
+library(shiny)
+library(plotly)
+```
+
+```{r}
+Copy_of_mill_para <- read_excel("D:/Analytics/Freelancing projects/New folder/Copy of mill para.xlsx")
+colnames(Copy_of_mill_para) <- gsub("MU 20 PULV A ","",colnames(Copy_of_mill_para))
+Copy_of_mill_para <- as.data.frame(Copy_of_mill_para)
+colnames(Copy_of_mill_para) <- gsub(" ","_",colnames(Copy_of_mill_para))
+names(Copy_of_mill_para) <-  make.names(names(Copy_of_mill_para))
+Copy_of_mill_para1 <- melt(Copy_of_mill_para,id=c("Date"))
+Copy_of_mill_para1 <- Copy_of_mill_para1 %>%
+   mutate(Date = ymd_hms(Date),
+          Year = year(Date),
+          Month = format(Date, "%b"),
+          Day = format(Date, "%a"),
+          DateDay = day(Date),
+          Hour = format(Date, "%H"),
+          Min =  format(Date, "%M"),
+          Sec =  format(Date, "%S"))
+#Copy_of_mill_para1 <- Copy_of_mill_para1 %>% mutate(Date = as.POSIXct(Date,format = '%d-%m-%Y %H:%M:%S'))
+Copy_of_mill_para1 <- Copy_of_mill_para1 %>% mutate(onlyDate = as.Date(Date))
+Copy_of_mill_para <- Copy_of_mill_para %>% mutate(onlyDate = as.Date(Date))
+Copy_of_mill_para <- Copy_of_mill_para %>%
+   mutate(Date = ymd_hms(Date),
+          Year = year(Date),
+          Month = format(Date, "%b"),
+          Day = format(Date, "%a"),
+          DateDay = day(Date),
+          Hour = format(Date, "%H"),
+          Min =  format(Date, "%M"),
+          Sec =  format(Date, "%S"))
+
+```
+
+Summary
+=================
+
+
+Inputs {.sidebar}
+-----------------------------------------------------------------------
+```{r}
+    selectInput("Plot1","Filter1",choices = c("","Trend","Correlation"))
+    output$filter_2 <- renderUI({
+    if (input$Plot1 == "") {
+    return()
+    } else if (input$Plot1 == "Trend") {
+      label = "Trend"
+      selectInput("b",label,choices = c("All",levels(factor(Copy_of_mill_para1$variable))),multiple = TRUE)
+    } else {
+      label = "First Variable"
+      selectInput("b",
+                label,
+                choices = c(levels(factor(Copy_of_mill_para1$variable))))
+    }
+    })
+    output$filter_3 <- renderUI({
+      if (input$Plot1 == "Trend" | input$Plot1 == "") {
+        return()
+      } else {
+        selectInput("a",
+                "Second Variable",
+                choices = c(levels(factor(Copy_of_mill_para1$variable))))
+      }
+    })
+uiOutput("filter_2")
+uiOutput("filter_3")
+uiOutput("filter_4")
+     output$filter_4 <- renderUI({
+       if(input$Plot1 == "Trend"){
+         dateRangeInput("s2","Date",min = min(Copy_of_mill_para1$onlyDate),max = max(Copy_of_mill_para1$onlyDate))
+       } else if(input$Plot1 == "Correlation"){
+         dateRangeInput("s3","Date",min = min(Copy_of_mill_para$onlyDate),max = max(Copy_of_mill_para$onlyDate))
+       }
+     })
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+
+### Chart A
+
+```{r}
+output$g1 <- renderPlotly({
+    req(input$Plot1)
+    req(input$b)
+    if (input$Plot1 == "Trend") {
+        plot_data <- Copy_of_mill_para1
+    }
+    if (input$Plot1 == "Trend" & input$b != "All") {
+        plot_data <- Copy_of_mill_para1 %>% filter(variable %in% input$b)
+    } 
+    if (input$Plot1 == "Correlation"){
+        plot_data <- Copy_of_mill_para
+    }
+    
+    if (input$Plot1 == "Trend") {
+        ggplotly(ggplot(plot_data, aes(x = Date, y = value, color = variable)) +
+            geom_line(size =  .2)+theme(legend.position = "none"))
+    } else if (input$Plot1 == "Correlation") {
+        req(input$a)
+        req(input$b)
+        ggplotly(ggplot(plot_data, aes_string(x = input$b, y = input$a)) +
+            geom_point(size =  .2))
+    }
+})
+
+
+plotlyOutput("g1")
+```
+
+### Table
+
+```{r}
+verbatimTextOutput("brush")
+output$brush <- renderPrint({
+    d <- event_data("plotly_selected")
+    if (is.null(d)) "Click and drag events (i.e., select/lasso) appear here (double-click to clear)" else d
+  })
+
+```
+
+
